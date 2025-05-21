@@ -1,23 +1,39 @@
-use std::num::ParseIntError;
+use std::{fmt, num::ParseIntError};
 
-use logos::Logos;
+use logos::{Lexer, Logos};
 
 #[derive(Default, Debug, Clone, PartialEq)]
-pub enum LexingError {
+pub enum LexicalError {
     InvalidInteger,
+    InvalidIdentifier,
     #[default]
-    Other,
+    InvalidToken,
 }
 
-impl From<ParseIntError> for LexingError {
+impl From<ParseIntError> for LexicalError {
     fn from(_: ParseIntError) -> Self {
         Self::InvalidInteger
     }
 }
 
-#[derive(Logos, PartialEq, Debug)]
-#[logos(error = LexingError)]
+pub struct IdentifierError;
+
+impl From<IdentifierError> for LexicalError {
+    fn from(_: IdentifierError) -> Self {
+        Self::InvalidIdentifier
+    }
+}
+
+fn produce_identifier_error(_: &mut Lexer<Token>) -> Result<(), LexicalError> {
+    Err(LexicalError::InvalidIdentifier)
+}
+
+#[derive(Logos, PartialEq, Debug, Clone)]
+#[logos(error = LexicalError)]
 #[logos(skip r"\s+")]
+// Skip comments
+#[logos(skip "//[^\r\n|\n|\r]*")]
+#[logos(skip r"/\*[^\*/]*\*/")]
 pub enum Token {
     // Keyword
     #[token("var")]
@@ -76,27 +92,24 @@ pub enum Token {
     LessThan,
     #[token(">")]
     GreaterThan,
-    #[token("==")]
-    DoubleEqual,
     #[token("<=")]
     LessEqualThan,
     #[token(">=")]
     GreaterEqualThan,
     // Identifier
-    #[regex(r"\d+\w*[a-zA-Z_]\w*")]
+    #[regex(r"\d+\w*[a-zA-Z_]\w*", produce_identifier_error)]
     InvalidIdentifier,
     #[regex(r"[a-zA-Z_]\w*", |lex| lex.slice().to_owned())]
     Identifier(String),
     // Literal
     #[regex(r"\d+", |lex| lex.slice().parse())]
     Integer(isize),
-    #[regex(r#"\"[^\"]*\""#, |lex| lex.slice().trim_matches('"').to_owned())]
-    String(String),
-    // Comment
-    #[regex("//[^\r\n|\n|\r]*")]
-    SingleLineComment,
-    #[regex(r"/\*[^\*/]*\*/")]
-    MultiLineComment,
+}
+
+impl fmt::Display for Token {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 #[cfg(test)]
@@ -126,7 +139,7 @@ mod tests {
         assert_eq!(lex.next(), Some(Ok(Token::Identifier("frills".to_owned()))));
         assert_eq!(lex.next(), Some(Ok(Token::Identifier("var_0".to_owned()))));
         assert_eq!(lex.next(), Some(Ok(Token::Identifier("_".to_owned()))));
-        assert_eq!(lex.next(), Some(Ok(Token::InvalidIdentifier)));
+        assert_eq!(lex.next(), Some(Err(LexicalError::InvalidIdentifier)));
         assert_eq!(lex.next(), None);
     }
 
@@ -142,26 +155,14 @@ mod tests {
     }
 
     #[test]
-    fn test_string() {
-        let mut lex = Token::lexer(r#" "c" "c++" "python" "java" "#);
-
-        assert_eq!(lex.next(), Some(Ok(Token::String("c".to_owned()))));
-        assert_eq!(lex.next(), Some(Ok(Token::String("c++".to_owned()))));
-        assert_eq!(lex.next(), Some(Ok(Token::String("python".to_owned()))));
-        assert_eq!(lex.next(), Some(Ok(Token::String("java".to_owned()))));
-        assert_eq!(lex.next(), None);
-    }
-
-    #[test]
     fn test_symbol() {
-        let mut lex = Token::lexer(r". ; <= > := == =");
+        let mut lex = Token::lexer(r". ; <= > := =");
 
         assert_eq!(lex.next(), Some(Ok(Token::Dot)));
         assert_eq!(lex.next(), Some(Ok(Token::Semicolon)));
         assert_eq!(lex.next(), Some(Ok(Token::LessEqualThan)));
         assert_eq!(lex.next(), Some(Ok(Token::GreaterThan)));
         assert_eq!(lex.next(), Some(Ok(Token::ColonEqual)));
-        assert_eq!(lex.next(), Some(Ok(Token::DoubleEqual)));
         assert_eq!(lex.next(), Some(Ok(Token::Equal)));
         assert_eq!(lex.next(), None);
     }
@@ -170,8 +171,6 @@ mod tests {
     fn test_comment() {
         let mut lex = Token::lexer("// discarded \n/*hello\nworld*/ abc = 1;");
 
-        assert_eq!(lex.next(), Some(Ok(Token::SingleLineComment)));
-        assert_eq!(lex.next(), Some(Ok(Token::MultiLineComment)));
         assert_eq!(lex.next(), Some(Ok(Token::Identifier("abc".to_owned()))));
         assert_eq!(lex.next(), Some(Ok(Token::Equal)));
         assert_eq!(lex.next(), Some(Ok(Token::Integer(1))));

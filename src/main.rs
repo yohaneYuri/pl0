@@ -1,14 +1,17 @@
-use logos::Logos;
-use pl0::token::Token;
+use grammar::ProgramParser;
+use pl0::lexer::Lexer;
+
+lalrpop_util::lalrpop_mod!(
+    #[allow(clippy::ptr_arg)]
+    #[rustfmt::skip]
+    grammar
+);
 
 fn main() {
-    println!("Hello, world!");
+    let source_code = std::fs::read_to_string("pl0_src/case_0.pl0").unwrap();
+    let lexer = Lexer::new(&source_code);
+    let parser = ProgramParser::new();
+    let ast = parser.parse(lexer).unwrap();
 
-    let mut lex = Token::lexer(include_str!("../pl0_src/case_0.pl0"));
-    while let Some(token) = lex.next() {
-        match token {
-            Ok(token) => println!("{:?}", token),
-            Err(err) => println!("{:?}, {}", err, lex.slice()),
-        }
-    }
+    println!("{:?}", ast);
 }

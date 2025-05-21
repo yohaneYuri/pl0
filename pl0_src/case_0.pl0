@@ -4,7 +4,7 @@ procedure fun1;
 	if a <= 10 then
 		begin
 			c := b + a;
-		end
+		end;
 begin
 	read(b);
 	while b # 0 do
@@ -12,5 +12,5 @@ begin
 			call fun1;
 			write(2 * c);
 			read(b);
-		end
-end.@!@
+		end;
+end.

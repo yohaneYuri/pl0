@@ -1,0 +1,165 @@
+use pl0::token::{Token, LexicalError};
+use pl0::ast;
+
+grammar;
+
+extern {
+	type Location = usize;
+	type Error = LexicalError;
+
+	enum Token {
+		"var" => Token::Var,
+		"const" => Token::Const,
+		"procedure" => Token::Procedure,
+		"begin" => Token::Begin,
+		"end" => Token::End,
+		"odd" => Token::Odd,
+		"if" => Token::If,
+		"then" => Token::Then,
+		"call" => Token::Call,
+		"while" => Token::While,
+		"do" => Token::Do,
+		"read" => Token::Read,
+		"write" => Token::Write,
+		";" => Token::Semicolon,
+		"." => Token::Dot,
+		"," => Token::Comma,
+		":=" => Token::ColonEqual,
+		"=" => Token::Equal,
+		"+" => Token::Plus,
+		"-" => Token::Minus,
+		"*" => Token::Star,
+		"/" => Token::Slash,
+		"(" => Token::LeftParenthese,
+		")" => Token::RightParenthese,
+		"#" => Token::Number,
+		"<" => Token::LessThan,
+		">" => Token::GreaterThan,
+		"<=" => Token::LessEqualThan,
+		">=" => Token::GreaterEqualThan,
+		"identifier" => Token::Identifier(<String>),
+		"integer" => Token::Integer(<isize>),
+	}
+}
+
+pub Program: ast::Program = <subprogram: Subprogram> "." => ast::Program {<>};
+
+pub Subprogram: Box<ast::Subprogram> =
+	<const_declaration: ConstDeclaration?>
+	<var_declaration: VarDeclaration?>
+	<procedure_definition: ProcedureDefinition?>
+	<statement: Statement>
+	=> Box::new(ast::Subprogram {<>});
+
+pub ConstDeclaration: ast::ConstDeclaration =
+	"const" <definition: ConstDefinition> <mut extra: ("," <ConstDefinition>)*> ";"
+	=> ast::ConstDeclaration { definitions: { 
+		extra.push(definition);
+		extra
+	}};
+
+pub ConstDefinition: ast::ConstDefinition =
+	<identifier: "identifier"> "=" <integer: "integer"> => ast::ConstDefinition {<>};
+
+pub VarDeclaration: ast::VarDeclaration =
+	"var" <identifier: "identifier"> <mut extra: ("," <"identifier">)*> ";"
+	=> ast::VarDeclaration { identifiers: {
+		extra.push(identifier);
+		extra
+	}};
+
+pub ProcedureDefinition: Box<ast::ProcedureDefinition> =
+	<header: ProcedureHeader>
+	<subprogram: Subprogram>
+	<mut definitions: (";" <ProcedureDefinition>)*> ";"
+	=> Box::new(ast::ProcedureDefinition {<>});
+
+pub ProcedureHeader: ast::ProcedureHeader = "procedure" <identifier: "identifier"> ";"
+	=> ast::ProcedureHeader {<>};
+
+pub Statement: Box<ast::Statement> = {
+	AssignStatement => Box::new(ast::Statement::Assign(<>)),
+	ConditionStatement => Box::new(ast::Statement::Condition(<>)),
+	LoopStatement => Box::new(ast::Statement::Loop(<>)),
+	CallStatement => Box::new(ast::Statement::Call(<>)),
+	ReadStatement => Box::new(ast::Statement::Read(<>)),
+	WriteStatement => Box::new(ast::Statement::Write(<>)),
+	CompoundStatement => Box::new(ast::Statement::Compound(<>)),
+	NullStatement => Box::new(<>),
+};
+
+pub AssignStatement: ast::AssignStatement =
+	<identifier: "identifier"> ":=" <expression: Expression> => ast::AssignStatement {<>};
+
+pub CompoundStatement: ast::CompoundStatement =
+	"begin" <statement: Statement> <mut extra: (";" <Statement>)*> "end"
+	=> ast::CompoundStatement { statements: {
+		extra.push(statement);
+		extra
+	}};
+
+pub NullStatement: ast::Statement = () => ast::Statement::Null;
+
+pub Condition: ast::Condition = {
+	Expression RelationalOperator Expression => ast::Condition::Binary(<>),
+	"odd" <Expression> => ast::Condition::Odd(<>),
+};
+
+pub Expression: Box<ast::Expression> =
+	<sign: Sign?> <item: Item> <pairs: (AddSubOperator Item)*> => Box::new(ast::Expression {<>});
+
+pub Sign: ast::Sign = {
+	"+" => ast::Sign::Positive,
+	"-" => ast::Sign::Negative,
+};
+
+pub Item: ast::Item =
+	<factor: Factor> <pairs: (MulDivOperator Factor)*> => ast::Item {<>};
+
+pub Factor: ast::Factor = {
+	"identifier" => ast::Factor::Identifier(<>),
+	"integer" => ast::Factor::Integer(<>),
+	"(" <Expression> ")" => ast::Factor::Expression(<>),
+};
+
+pub AddSubOperator: ast::AddSubOperator = {
+	"+" => ast::AddSubOperator::Add,
+	"-" => ast::AddSubOperator::Sub,
+};
+
+pub MulDivOperator: ast::MulDivOperator = {
+	"*" => ast::MulDivOperator::Mul,
+	"/" => ast::MulDivOperator::Div,
+};
+
+pub RelationalOperator: ast::RelationalOperator = {
+	"=" => ast::RelationalOperator::Equal,
+	"#" => ast::RelationalOperator::NotEqual,
+	"<" => ast::RelationalOperator::LessThan,
+	"<=" => ast::RelationalOperator::LessEqualThan,
+	">" => ast::RelationalOperator::GreaterThan,
+	">=" => ast::RelationalOperator::GreaterEqualThan,
+};
+
+pub ConditionStatement: ast::ConditionStatement =
+	"if" <condition: Condition> "then" <statement: Statement> => ast::ConditionStatement {<>};
+
+pub CallStatement: ast::CallStatement =
+	"call" <procedure_identifier: "identifier"> => ast::CallStatement {<>};
+
+pub LoopStatement: ast::LoopStatement =
+	"while" <condition: Condition> "do" <statement: Statement> => ast::LoopStatement {<>};
+
+pub ReadStatement: ast::ReadStatement =
+	"read" "(" <identifier: "identifier"> <mut extra: ("," <"identifier">)*> ")"
+	=> ast::ReadStatement { identifiers: {
+		extra.push(identifier);
+		extra
+	}};
+
+pub WriteStatement: ast::WriteStatement =
+	"write" "(" <expression: Expression> <mut extra: ("," <Expression>)*> ")"
+	=> ast::WriteStatement { expressions: {
+		extra.push(expression);
+		extra
+	}};
