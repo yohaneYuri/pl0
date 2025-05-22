@@ -1,7 +1,8 @@
 use pl0::token::{Token, LexicalError};
 use pl0::ast;
+use pl0::symbol_table::{Kind, SymbolTableBuilder};
 
-grammar;
+grammar<'table>(symbol_table: &'table mut SymbolTableBuilder);
 
 extern {
 	type Location = usize;
@@ -55,6 +56,13 @@ pub ConstDeclaration: ast::ConstDeclaration =
 	"const" <definition: ConstDefinition> <mut extra: ("," <ConstDefinition>)*> ";"
 	=> ast::ConstDeclaration { definitions: { 
 		extra.push(definition);
+
+		extra.iter()
+			.for_each(|definition| symbol_table.add(
+				definition.identifier.clone(),
+				Kind::Const(definition.integer),
+			));
+
 		extra
 	}};
 
@@ -65,22 +73,42 @@ pub VarDeclaration: ast::VarDeclaration =
 	"var" <identifier: "identifier"> <mut extra: ("," <"identifier">)*> ";"
 	=> ast::VarDeclaration { identifiers: {
 		extra.push(identifier);
+
+		extra.iter()
+			.for_each(|identifier| symbol_table.add(
+				identifier.clone(),
+				Kind::Var(0),
+			));
+
 		extra
 	}};
 
 pub ProcedureDefinition: Box<ast::ProcedureDefinition> =
 	<header: ProcedureHeader>
 	<subprogram: Subprogram>
-	<mut definitions: (";" <ProcedureDefinition>)*> ";"
-	=> Box::new(ast::ProcedureDefinition {<>});
+	<definitions: (";" <ProcedureDefinition>)*> ";"
+	=> {
+		symbol_table.leave();
+		Box::new(ast::ProcedureDefinition {<>})
+	};
 
 pub ProcedureHeader: ast::ProcedureHeader = "procedure" <identifier: "identifier"> ";"
-	=> ast::ProcedureHeader {<>};
+	=> {
+		symbol_table.add(<>.clone(), Kind::Procedure);
+		symbol_table.enter();
+		ast::ProcedureHeader {<>}
+	};
 
 pub Statement: Box<ast::Statement> = {
 	AssignStatement => Box::new(ast::Statement::Assign(<>)),
-	ConditionStatement => Box::new(ast::Statement::Condition(<>)),
-	LoopStatement => Box::new(ast::Statement::Loop(<>)),
+	ConditionStatement => {
+		symbol_table.leave();
+		Box::new(ast::Statement::Condition(<>))
+	},
+	LoopStatement => {
+		symbol_table.leave();
+		Box::new(ast::Statement::Loop(<>))
+	},
 	CallStatement => Box::new(ast::Statement::Call(<>)),
 	ReadStatement => Box::new(ast::Statement::Read(<>)),
 	WriteStatement => Box::new(ast::Statement::Write(<>)),
@@ -142,13 +170,19 @@ pub RelationalOperator: ast::RelationalOperator = {
 };
 
 pub ConditionStatement: ast::ConditionStatement =
-	"if" <condition: Condition> "then" <statement: Statement> => ast::ConditionStatement {<>};
+	"if" <condition: Condition> "then" <statement: Statement> => {
+		symbol_table.enter();
+		ast::ConditionStatement {<>}
+	};
 
 pub CallStatement: ast::CallStatement =
 	"call" <procedure_identifier: "identifier"> => ast::CallStatement {<>};
 
 pub LoopStatement: ast::LoopStatement =
-	"while" <condition: Condition> "do" <statement: Statement> => ast::LoopStatement {<>};
+	"while" <condition: Condition> "do" <statement: Statement> => {
+		symbol_table.enter();
+		ast::LoopStatement {<>}
+	};
 
 pub ReadStatement: ast::ReadStatement =
 	"read" "(" <identifier: "identifier"> <mut extra: ("," <"identifier">)*> ")"

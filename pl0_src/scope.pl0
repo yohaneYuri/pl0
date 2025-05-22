@@ -1,0 +1,29 @@
+const a = 20;
+var b, c;
+
+procedure fun1;
+	var d;
+	
+	procedure fun2;
+		const e = 10;
+		
+		procedure fun3;
+			var h;
+			h := 1;
+		c := 1;
+begin
+	d := 10;
+	d := 2;
+end;
+
+begin
+	if b = 0 then
+		b := 20;
+
+	while a # 20 do
+	begin
+		b := 1;
+		if c = 10 then
+			c := c * 10;
+	end;
+end.

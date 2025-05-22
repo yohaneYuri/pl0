@@ -1,3 +1,5 @@
+use crate::symbol_table::SymbolTable;
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Program {
     pub subprogram: Box<Subprogram>,
@@ -141,4 +143,8 @@ pub struct ReadStatement {
 #[derive(Clone, Debug, PartialEq)]
 pub struct WriteStatement {
     pub expressions: Vec<Box<Expression>>,
+}
+
+pub trait Ast {
+    fn traverse(&mut self, symbol_table: &mut SymbolTable);
 }
