@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 #[derive(Debug)]
 pub enum Kind {
-    Const(isize),
-    Var(isize),
+    Const,
+    Var,
     Procedure,
 }
 

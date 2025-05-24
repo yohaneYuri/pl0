@@ -55,15 +55,16 @@ pub Subprogram: Box<ast::Subprogram> =
 pub ConstDeclaration: ast::ConstDeclaration =
 	"const" <definition: ConstDefinition> <mut extra: ("," <ConstDefinition>)*> ";"
 	=> ast::ConstDeclaration { definitions: { 
-		extra.push(definition);
+		let mut output = vec![definition];
+		output.append(&mut extra);
 
-		extra.iter()
+		output.iter()
 			.for_each(|definition| symbol_table.add(
 				definition.identifier.clone(),
-				Kind::Const(definition.integer),
+				Kind::Const,
 			));
 
-		extra
+		output
 	}};
 
 pub ConstDefinition: ast::ConstDefinition =
@@ -72,15 +73,16 @@ pub ConstDefinition: ast::ConstDefinition =
 pub VarDeclaration: ast::VarDeclaration =
 	"var" <identifier: "identifier"> <mut extra: ("," <"identifier">)*> ";"
 	=> ast::VarDeclaration { identifiers: {
-		extra.push(identifier);
+		let mut output = vec![identifier];
+		output.append(&mut extra);
 
-		extra.iter()
+		output.iter()
 			.for_each(|identifier| symbol_table.add(
 				identifier.clone(),
-				Kind::Var(0),
+				Kind::Var,
 			));
 
-		extra
+		output
 	}};
 
 pub ProcedureDefinition: Box<ast::ProcedureDefinition> =
@@ -122,8 +124,9 @@ pub AssignStatement: ast::AssignStatement =
 pub CompoundStatement: ast::CompoundStatement =
 	"begin" <statement: Statement> <mut extra: (";" <Statement>)*> "end"
 	=> ast::CompoundStatement { statements: {
-		extra.push(statement);
-		extra
+		let mut output = vec![statement];
+		output.append(&mut extra);
+		output
 	}};
 
 pub NullStatement: ast::Statement = () => ast::Statement::Null;

@@ -1,5 +1,3 @@
-use crate::symbol_table::SymbolTable;
-
 #[derive(Clone, Debug, PartialEq)]
 pub struct Program {
     pub subprogram: Box<Subprogram>,
@@ -96,19 +94,19 @@ pub enum Factor {
     Expression(Box<Expression>),
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum AddSubOperator {
     Add,
     Sub,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum MulDivOperator {
     Mul,
     Div,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum RelationalOperator {
     Equal,
     NotEqual,
@@ -143,8 +141,4 @@ pub struct ReadStatement {
 #[derive(Clone, Debug, PartialEq)]
 pub struct WriteStatement {
     pub expressions: Vec<Box<Expression>>,
-}
-
-pub trait Ast {
-    fn traverse(&mut self, symbol_table: &mut SymbolTable);
 }
