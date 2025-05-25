@@ -1,8 +1,13 @@
-use pl0::token::{Token, LexicalError};
-use pl0::ast;
-use pl0::symbol_table::{Kind, SymbolTableBuilder};
+use crate::token::{Token, LexicalError};
+use crate::ast::*;
+use crate::symbol_table::{Kind, SymbolTableBuilder};
 
-grammar<'table>(symbol_table: &'table mut SymbolTableBuilder);
+use lalrpop_util::ErrorRecovery;
+
+grammar<'table, 'err>(
+	symbol_table: &'table mut SymbolTableBuilder,
+	errors: &'err mut Vec<ErrorRecovery<usize, Token, LexicalError>>,
+);
 
 extern {
 	type Location = usize;
@@ -43,18 +48,21 @@ extern {
 	}
 }
 
-pub Program: ast::Program = <subprogram: Subprogram> "." => ast::Program {<>};
+RecoverError: () = ! => errors.push(<>);
 
-pub Subprogram: Box<ast::Subprogram> =
+pub Program: Program =
+	<subprogram: Subprogram> "." => Program {<>};
+
+pub Subprogram: Box<Subprogram> =
 	<const_declaration: ConstDeclaration?>
 	<var_declaration: VarDeclaration?>
 	<procedure_definition: ProcedureDefinition?>
 	<statement: Statement>
-	=> Box::new(ast::Subprogram {<>});
+	=> Box::new(Subprogram {<>});
 
-pub ConstDeclaration: ast::ConstDeclaration =
+pub ConstDeclaration: ConstDeclaration =
 	"const" <definition: ConstDefinition> <mut extra: ("," <ConstDefinition>)*> ";"
-	=> ast::ConstDeclaration { definitions: { 
+	=> ConstDeclaration { definitions: { 
 		let mut output = vec![definition];
 		output.append(&mut extra);
 
@@ -67,12 +75,12 @@ pub ConstDeclaration: ast::ConstDeclaration =
 		output
 	}};
 
-pub ConstDefinition: ast::ConstDefinition =
-	<identifier: "identifier"> "=" <integer: "integer"> => ast::ConstDefinition {<>};
+pub ConstDefinition: ConstDefinition =
+	<identifier: "identifier"> "=" <integer: "integer"> => ConstDefinition {<>};
 
-pub VarDeclaration: ast::VarDeclaration =
+pub VarDeclaration: VarDeclaration =
 	"var" <identifier: "identifier"> <mut extra: ("," <"identifier">)*> ";"
-	=> ast::VarDeclaration { identifiers: {
+	=> VarDeclaration { identifiers: {
 		let mut output = vec![identifier];
 		output.append(&mut extra);
 
@@ -85,118 +93,124 @@ pub VarDeclaration: ast::VarDeclaration =
 		output
 	}};
 
-pub ProcedureDefinition: Box<ast::ProcedureDefinition> =
+pub ProcedureDefinition: Box<ProcedureDefinition> =
 	<header: ProcedureHeader>
 	<subprogram: Subprogram>
 	<definitions: (";" <ProcedureDefinition>)*> ";"
 	=> {
 		symbol_table.leave();
-		Box::new(ast::ProcedureDefinition {<>})
+		Box::new(ProcedureDefinition {<>})
 	};
 
-pub ProcedureHeader: ast::ProcedureHeader = "procedure" <identifier: "identifier"> ";"
+pub ProcedureHeader: ProcedureHeader = "procedure" <identifier: "identifier"> ";"
 	=> {
 		symbol_table.add(<>.clone(), Kind::Procedure);
 		symbol_table.enter();
-		ast::ProcedureHeader {<>}
+		ProcedureHeader {<>}
 	};
 
-pub Statement: Box<ast::Statement> = {
-	AssignStatement => Box::new(ast::Statement::Assign(<>)),
+pub Statement: Box<Statement> = {
+	AssignStatement => Box::new(Statement::Assign(<>)),
 	ConditionStatement => {
 		symbol_table.leave();
-		Box::new(ast::Statement::Condition(<>))
+		Box::new(Statement::Condition(<>))
 	},
 	LoopStatement => {
 		symbol_table.leave();
-		Box::new(ast::Statement::Loop(<>))
+		Box::new(Statement::Loop(<>))
 	},
-	CallStatement => Box::new(ast::Statement::Call(<>)),
-	ReadStatement => Box::new(ast::Statement::Read(<>)),
-	WriteStatement => Box::new(ast::Statement::Write(<>)),
-	CompoundStatement => Box::new(ast::Statement::Compound(<>)),
+	CallStatement => Box::new(Statement::Call(<>)),
+	ReadStatement => Box::new(Statement::Read(<>)),
+	WriteStatement => Box::new(Statement::Write(<>)),
+	CompoundStatement => Box::new(Statement::Compound(<>)),
 	NullStatement => Box::new(<>),
+	RecoverError => Box::new(Statement::Error),
 };
 
-pub AssignStatement: ast::AssignStatement =
-	<identifier: "identifier"> ":=" <expression: Expression> => ast::AssignStatement {<>};
+pub AssignStatement: AssignStatement =
+	<identifier: "identifier"> ":=" <expression: Expression> => AssignStatement {<>};
 
-pub CompoundStatement: ast::CompoundStatement =
+pub CompoundStatement: CompoundStatement =
 	"begin" <statement: Statement> <mut extra: (";" <Statement>)*> "end"
-	=> ast::CompoundStatement { statements: {
+	=> CompoundStatement { statements: {
 		let mut output = vec![statement];
 		output.append(&mut extra);
 		output
 	}};
 
-pub NullStatement: ast::Statement = () => ast::Statement::Null;
+pub NullStatement: Statement = () => Statement::Null;
 
-pub Condition: ast::Condition = {
-	Expression RelationalOperator Expression => ast::Condition::Binary(<>),
-	"odd" <Expression> => ast::Condition::Odd(<>),
+pub Condition: Condition = {
+	Expression RelationalOperator Expression => Condition::Binary(<>),
+	"odd" <Expression> => Condition::Odd(<>),
 };
 
-pub Expression: Box<ast::Expression> =
-	<sign: Sign?> <item: Item> <pairs: (AddSubOperator Item)*> => Box::new(ast::Expression {<>});
-
-pub Sign: ast::Sign = {
-	"+" => ast::Sign::Positive,
-	"-" => ast::Sign::Negative,
+pub Expression: Box<Expression> = {
+	<sign: Sign?> <item: Item> <pairs: (AddSubOperator Item)*> => Box::new(Expression::Valid {<>}),
+	RecoverError => Box::new(Expression::Invalid),
 };
 
-pub Item: ast::Item =
-	<factor: Factor> <pairs: (MulDivOperator Factor)*> => ast::Item {<>};
-
-pub Factor: ast::Factor = {
-	"identifier" => ast::Factor::Identifier(<>),
-	"integer" => ast::Factor::Integer(<>),
-	"(" <Expression> ")" => ast::Factor::Expression(<>),
+pub Sign: Sign = {
+	"+" => Sign::Positive,
+	"-" => Sign::Negative,
 };
 
-pub AddSubOperator: ast::AddSubOperator = {
-	"+" => ast::AddSubOperator::Add,
-	"-" => ast::AddSubOperator::Sub,
+pub Item: Item = <factor: Factor> <pairs: (MulDivOperator Factor)*> => Item {<>};
+
+pub Factor: Factor = {
+	"identifier" => Factor::Identifier(<>),
+	"integer" => Factor::Integer(<>),
+	"(" <Expression> ")" => Factor::Expression(<>),
 };
 
-pub MulDivOperator: ast::MulDivOperator = {
-	"*" => ast::MulDivOperator::Mul,
-	"/" => ast::MulDivOperator::Div,
+pub AddSubOperator: AddSubOperator = {
+	"+" => AddSubOperator::Add,
+	"-" => AddSubOperator::Sub,
 };
 
-pub RelationalOperator: ast::RelationalOperator = {
-	"=" => ast::RelationalOperator::Equal,
-	"#" => ast::RelationalOperator::NotEqual,
-	"<" => ast::RelationalOperator::LessThan,
-	"<=" => ast::RelationalOperator::LessEqualThan,
-	">" => ast::RelationalOperator::GreaterThan,
-	">=" => ast::RelationalOperator::GreaterEqualThan,
+pub MulDivOperator: MulDivOperator = {
+	"*" => MulDivOperator::Mul,
+	"/" => MulDivOperator::Div,
 };
 
-pub ConditionStatement: ast::ConditionStatement =
+pub RelationalOperator: RelationalOperator = {
+	"=" => RelationalOperator::Equal,
+	"#" => RelationalOperator::NotEqual,
+	"<" => RelationalOperator::LessThan,
+	"<=" => RelationalOperator::LessEqualThan,
+	">" => RelationalOperator::GreaterThan,
+	">=" => RelationalOperator::GreaterEqualThan,
+};
+
+pub ConditionStatement: ConditionStatement =
 	"if" <condition: Condition> "then" <statement: Statement> => {
 		symbol_table.enter();
-		ast::ConditionStatement {<>}
+		ConditionStatement {<>}
 	};
 
-pub CallStatement: ast::CallStatement =
-	"call" <procedure_identifier: "identifier"> => ast::CallStatement {<>};
+pub CallStatement: CallStatement =
+	"call" <procedure_identifier: "identifier"> => CallStatement {<>};
 
-pub LoopStatement: ast::LoopStatement =
+pub LoopStatement: LoopStatement =
 	"while" <condition: Condition> "do" <statement: Statement> => {
 		symbol_table.enter();
-		ast::LoopStatement {<>}
+		LoopStatement {<>}
 	};
 
-pub ReadStatement: ast::ReadStatement =
+pub ReadStatement: ReadStatement =
 	"read" "(" <identifier: "identifier"> <mut extra: ("," <"identifier">)*> ")"
-	=> ast::ReadStatement { identifiers: {
-		extra.push(identifier);
-		extra
+	=> ReadStatement { identifiers: {
+		let mut output = vec![identifier];
+		output.append(&mut extra);
+
+		output
 	}};
 
-pub WriteStatement: ast::WriteStatement =
+pub WriteStatement: WriteStatement =
 	"write" "(" <expression: Expression> <mut extra: ("," <Expression>)*> ")"
-	=> ast::WriteStatement { expressions: {
-		extra.push(expression);
-		extra
+	=> WriteStatement { expressions: {
+		let mut output = vec![expression];
+		output.append(&mut extra);
+
+		output
 	}};

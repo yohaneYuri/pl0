@@ -49,6 +49,7 @@ pub enum Statement {
     Write(WriteStatement),
     Compound(CompoundStatement),
     Null,
+    Error,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -69,10 +70,13 @@ pub enum Condition {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Expression {
-    pub sign: Option<Sign>,
-    pub item: Item,
-    pub pairs: Vec<(AddSubOperator, Item)>,
+pub enum Expression {
+    Valid {
+        sign: Option<Sign>,
+        item: Item,
+        pairs: Vec<(AddSubOperator, Item)>,
+    },
+    Invalid,
 }
 
 #[derive(Clone, Debug, PartialEq)]

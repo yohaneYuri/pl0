@@ -1,27 +1,16 @@
-use grammar::ProgramParser;
-use pl0::{lexer::Lexer, semantic::AstTraverser, symbol_table::SymbolTableBuilder};
+use std::env;
 
-lalrpop_util::lalrpop_mod!(
-    #[allow(clippy::ptr_arg)]
-    #[rustfmt::skip]
-    grammar
-);
+use pl0::compiler::Compiler;
 
 fn main() {
-    let mut symbols = SymbolTableBuilder::new();
-    let source_code = std::fs::read_to_string("pl0_src/normal.pl0").unwrap();
-    let lexer = Lexer::new(&source_code);
-    let parser = ProgramParser::new();
-    let ast = parser.parse(&mut symbols, lexer).unwrap();
-    let symbols = symbols.build();
-    let tacs = AstTraverser::traverse(&ast, &symbols).unwrap();
+    let args: Vec<String> = env::args().collect();
+    let file = args.iter().nth(1);
 
-    println!("======== AST ========");
-    println!();
-    println!("{:?}", ast);
-    println!("======== Symbol Table ========");
-    println!("{:?}", symbols);
-    println!();
-    println!("======== TACs ========");
-    tacs.iter().for_each(|tac| println!("{}", tac));
+    if let Some(file) = file {
+        let compile_result = Compiler::compile(file);
+        match compile_result {
+            Ok(tacs) => tacs.iter().for_each(|tac| println!("{tac}")),
+            Err(errs) => errs.iter().for_each(|err| println!("{:?}", err)),
+        }
+    }
 }

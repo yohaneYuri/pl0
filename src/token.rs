@@ -16,14 +16,6 @@ impl From<ParseIntError> for LexicalError {
     }
 }
 
-pub struct IdentifierError;
-
-impl From<IdentifierError> for LexicalError {
-    fn from(_: IdentifierError) -> Self {
-        Self::InvalidIdentifier
-    }
-}
-
 fn produce_identifier_error(_: &mut Lexer<Token>) -> Result<(), LexicalError> {
     Err(LexicalError::InvalidIdentifier)
 }

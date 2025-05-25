@@ -49,7 +49,7 @@ impl Visit for Program {
 
 impl Visit for Subprogram {
     fn visit(&self, symbol_table: &SymbolTable) -> VisitResult {
-        let mut tacs = vec![];
+        let mut tacs = Vec::new();
         if let Some(declaration) = &self.const_declaration {
             let mut result = declaration.visit(symbol_table)?;
             tacs.append(&mut result.tacs);
@@ -75,7 +75,7 @@ impl Visit for Subprogram {
 
 impl Visit for ConstDeclaration {
     fn visit(&self, symbol_table: &SymbolTable) -> VisitResult {
-        let mut tacs = vec![];
+        let mut tacs = Vec::new();
         for definition in self.definitions.iter() {
             let mut result = definition.visit(symbol_table)?;
             tacs.append(&mut result.tacs);
@@ -156,8 +156,8 @@ impl Visit for Statement {
             Statement::Read(statement) => statement.visit(symbol_table),
             Statement::Write(statement) => statement.visit(symbol_table),
             Statement::Compound(statement) => statement.visit(symbol_table),
-            Statement::Null => Ok(VisitReturn {
-                tacs: vec![],
+            Statement::Null | Statement::Error => Ok(VisitReturn {
+                tacs: Vec::new(),
                 attributes: Attributes::Empty,
             }),
         }
@@ -190,7 +190,7 @@ impl Visit for AssignStatement {
 
 impl Visit for CompoundStatement {
     fn visit(&self, symbol_table: &SymbolTable) -> VisitResult {
-        let mut tacs = vec![];
+        let mut tacs = Vec::new();
         for statement in self.statements.iter() {
             tacs.append(&mut statement.visit(symbol_table)?.tacs);
         }
@@ -237,32 +237,40 @@ impl Visit for Condition {
 
 impl Visit for Expression {
     fn visit(&self, symbol_table: &SymbolTable) -> VisitResult {
-        let mut item_result = self.item.visit(symbol_table)?;
-        if Some(Sign::Negative) == self.sign {
-            // A = -B => A = 0 - B
-            item_result = generate_arithmetic_return(
-                "uminus",
-                // Fake a return here
-                VisitReturn {
-                    tacs: vec![],
-                    attributes: Attributes::Expression(RightValue::Literal(0)),
-                },
-                ArithmeticOperator::Sub,
-                item_result,
-            );
-        }
+        match self {
+            Self::Valid { item, sign, pairs } => {
+                let mut item_result = item.visit(symbol_table)?;
+                if Some(Sign::Negative) == *sign {
+                    // A = -B => A = 0 - B
+                    item_result = generate_arithmetic_return(
+                        "uminus",
+                        // Fake a return here
+                        VisitReturn {
+                            tacs: Vec::new(),
+                            attributes: Attributes::Expression(RightValue::Literal(0)),
+                        },
+                        ArithmeticOperator::Sub,
+                        item_result,
+                    );
+                }
 
-        let mut result = item_result;
-        for (operator, item) in self.pairs.iter() {
-            result = generate_arithmetic_return(
-                "expression",
-                result,
-                (*operator).into(),
-                item.visit(symbol_table)?,
-            );
-        }
+                let mut result = item_result;
+                for (operator, item) in pairs.iter() {
+                    result = generate_arithmetic_return(
+                        "expression",
+                        result,
+                        (*operator).into(),
+                        item.visit(symbol_table)?,
+                    );
+                }
 
-        Ok(result)
+                Ok(result)
+            }
+            Self::Invalid => Ok(VisitReturn {
+                tacs: Vec::new(),
+                attributes: Attributes::Empty,
+            }),
+        }
     }
 }
 
@@ -288,11 +296,11 @@ impl Visit for Factor {
     fn visit(&self, symbol_table: &SymbolTable) -> VisitResult {
         match self {
             Factor::Identifier(name) => Ok(VisitReturn {
-                tacs: vec![],
+                tacs: Vec::new(),
                 attributes: Attributes::Expression(RightValue::ExistingIdentifier(name.clone())),
             }),
             Factor::Integer(value) => Ok(VisitReturn {
-                tacs: vec![],
+                tacs: Vec::new(),
                 attributes: Attributes::Expression(RightValue::Literal(*value)),
             }),
             Factor::Expression(expression) => expression.visit(symbol_table),
@@ -390,7 +398,7 @@ impl Visit for ReadStatement {
 
 impl Visit for WriteStatement {
     fn visit(&self, symbol_table: &SymbolTable) -> VisitResult {
-        let mut tacs = vec![];
+        let mut tacs = Vec::new();
         for expression in self.expressions.iter() {
             let mut result = expression.visit(symbol_table)?;
             tacs.append(&mut result.tacs);
