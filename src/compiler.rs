@@ -1,9 +1,9 @@
-use lalrpop_util::ErrorRecovery;
+use lalrpop_util::{ErrorRecovery, ParseError};
 
 use crate::{
     grammar::ProgramParser,
     lexer::Lexer,
-    semantic::AstTraverser,
+    semantic::{AstTraverser, SemanticError},
     symbol_table::SymbolTableBuilder,
     tac::Tac,
     token::{LexicalError, Token},
@@ -12,22 +12,29 @@ use crate::{
 pub struct Compiler;
 
 impl Compiler {
-    pub fn compile(
-        source: &str,
-    ) -> Result<Vec<Tac>, Vec<ErrorRecovery<usize, Token, LexicalError>>> {
+    pub fn compile(source: &str) -> Result<Vec<Tac>, CompileError> {
         let mut symbols = SymbolTableBuilder::new();
-        let mut errors = Vec::new();
+        let mut syntax_errors = Vec::new();
 
         let source_code = std::fs::read_to_string(source).unwrap();
         let lexer = Lexer::new(&source_code);
         let parser = ProgramParser::new();
-        let ast = parser.parse(&mut symbols, &mut errors, lexer).unwrap();
-        if !errors.is_empty() {
-            return Err(errors);
+        let parse_result = parser.parse(&mut symbols, &mut syntax_errors, lexer);
+        if let Err(err) = parse_result {
+            return Err(CompileError::Lexical(err));
         }
-        let symbols = symbols.build();
-        let tacs = AstTraverser::traverse(&ast, &symbols).unwrap();
+        if !syntax_errors.is_empty() {
+            return Err(CompileError::Syntax(syntax_errors));
+        }
 
-        Ok(tacs)
+        let ast = parse_result.unwrap();
+        let symbols = symbols.build();
+        AstTraverser::traverse(&ast, &symbols).map_err(|err| CompileError::Semantic(err))
     }
+}
+
+pub enum CompileError {
+    Lexical(ParseError<usize, Token, LexicalError>),
+    Syntax(Vec<ErrorRecovery<usize, Token, LexicalError>>),
+    Semantic(Vec<SemanticError>),
 }
