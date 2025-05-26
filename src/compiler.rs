@@ -4,7 +4,7 @@ use crate::{
     grammar::ProgramParser,
     lexer::Lexer,
     semantic::{AstTraverser, SemanticError},
-    symbol_table::SymbolTableBuilder,
+    symbol_table::{SymbolTable, SymbolTableBuilder},
     tac::Tac,
     token::{LexicalError, Token},
 };
@@ -12,7 +12,7 @@ use crate::{
 pub struct Compiler;
 
 impl Compiler {
-    pub fn compile(source: &str) -> Result<Vec<Tac>, CompileError> {
+    pub fn compile(source: &str) -> Result<(Vec<Tac>, SymbolTable), CompileError> {
         let mut symbols = SymbolTableBuilder::new();
         let mut syntax_errors = Vec::new();
 
@@ -29,7 +29,9 @@ impl Compiler {
 
         let ast = parse_result.unwrap();
         let symbols = symbols.build();
-        AstTraverser::traverse(&ast, &symbols).map_err(|err| CompileError::Semantic(err))
+        AstTraverser::traverse(&ast, &symbols)
+            .and_then(move |tacs| Ok((tacs, symbols)))
+            .map_err(|err| CompileError::Semantic(err))
     }
 }
 

@@ -9,12 +9,22 @@ fn main() {
     if let Some(file) = file {
         let compile_result = Compiler::compile(file);
         match compile_result {
-            Ok(tacs) => tacs.iter().for_each(|tac| println!("{tac}")),
-            Err(errs) => match errs {
-                CompileError::Lexical(err) => println!("{:?}", err),
-                CompileError::Syntax(errs) => errs.iter().for_each(|err| println!("{:?}", err)),
-                CompileError::Semantic(errs) => errs.iter().for_each(|err| println!("{:?}", err)),
-            },
+            Ok((tacs, symbols)) => {
+                println!("==== TACs ====");
+                tacs.iter().for_each(|tac| println!("{tac}"));
+                println!("\n==== Symbols ====");
+                symbols.iter().for_each(|symbol| println!("{:?}", symbol));
+            }
+            Err(errs) => {
+                println!("==== Compile Errors ====");
+                match errs {
+                    CompileError::Lexical(err) => println!("{:?}", err),
+                    CompileError::Syntax(errs) => errs.iter().for_each(|err| println!("{:?}", err)),
+                    CompileError::Semantic(errs) => {
+                        errs.iter().for_each(|err| println!("{:?}", err))
+                    }
+                }
+            }
         }
     }
 }

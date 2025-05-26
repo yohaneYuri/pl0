@@ -110,7 +110,7 @@ impl Visit for ConstDeclaration {
 }
 
 impl Visit for ConstDefinition {
-    fn visit(&self, _: &SymbolTable, semantic_errors: &mut Vec<SemanticError>) -> VisitReturn {
+    fn visit(&self, _: &SymbolTable, _: &mut Vec<SemanticError>) -> VisitReturn {
         let define_tac = Tac::Const(self.identifier.clone());
         let assign_tac = Tac::Assign {
             destination: LeftValue::ExistingIdentifier(self.identifier.clone()),
@@ -126,7 +126,7 @@ impl Visit for ConstDefinition {
 }
 
 impl Visit for VarDeclaration {
-    fn visit(&self, _: &SymbolTable, semantic_errors: &mut Vec<SemanticError>) -> VisitReturn {
+    fn visit(&self, _: &SymbolTable, _: &mut Vec<SemanticError>) -> VisitReturn {
         let tacs = self
             .identifiers
             .iter()
@@ -398,7 +398,7 @@ impl Visit for ConditionStatement {
 }
 
 impl Visit for CallStatement {
-    fn visit(&self, _: &SymbolTable, semantic_errors: &mut Vec<SemanticError>) -> VisitReturn {
+    fn visit(&self, _: &SymbolTable, _: &mut Vec<SemanticError>) -> VisitReturn {
         VisitReturn {
             tacs: vec![Tac::Call(self.procedure_identifier.clone())],
             attributes: Attributes::Empty,
@@ -443,7 +443,7 @@ impl Visit for LoopStatement {
 }
 
 impl Visit for ReadStatement {
-    fn visit(&self, _: &SymbolTable, semantic_errors: &mut Vec<SemanticError>) -> VisitReturn {
+    fn visit(&self, _: &SymbolTable, _: &mut Vec<SemanticError>) -> VisitReturn {
         let tacs = self
             .identifiers
             .iter()
