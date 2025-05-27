@@ -2,7 +2,7 @@ use std::{fmt, num::ParseIntError};
 
 use logos::{Lexer, Logos};
 
-#[derive(Default, Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq)]
 pub enum LexicalError {
     InvalidInteger,
     InvalidIdentifier,

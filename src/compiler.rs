@@ -30,7 +30,7 @@ impl Compiler {
         let ast = parse_result.unwrap();
         let symbols = symbols.build();
         AstTraverser::traverse(&ast, &symbols)
-            .and_then(move |tacs| Ok((tacs, symbols)))
+            .map(move |tacs| (tacs, symbols))
             .map_err(|err| CompileError::Semantic(err))
     }
 }
