@@ -32,9 +32,9 @@ fn main() {
                     }
                 }
             }
-
-            return;
         }
+
+        return;
     }
 
     use pl0::lexer::Lexer;
