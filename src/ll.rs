@@ -113,13 +113,18 @@ impl<'input> Ll1Parser<'input> {
             None => Err(UnexpectedBehaviorWhileParsing::Panic(
                 PanicError::UnexpectedEof,
             )),
-            Some(current) => {
-                let current = current.map_err(|err| {
+            Some(lookahead) => {
+                let lookahead = lookahead.map_err(|err| {
                     UnexpectedBehaviorWhileParsing::Panic(PanicError::Lexical(err))
                 })?;
-                if current != token {
+
+                if lookahead != token {
+                    // Do not take it, give it back
+                    self.lookahead = Some(Ok(lookahead));
                     self.record(SyntaxError);
                     self.synchronize();
+                    // Jump to synchronization point
+                    return Err(UnexpectedBehaviorWhileParsing::UnexpectedNormalToken);
                 }
 
                 self.advance();
@@ -135,7 +140,37 @@ impl<'input> Ll1Parser<'input> {
 
     #[inline]
     fn synchronize(&mut self) {
-        todo!()
+        println!("[debug] recovering from error");
+        while let Some(maybe_token) = &self.lookahead {
+            if maybe_token.is_err() {
+                self.advance();
+                continue;
+            }
+
+            let token = maybe_token.as_ref().unwrap();
+            match token {
+                Token::Var
+                | Token::Const
+                | Token::Procedure
+                | Token::Begin
+                | Token::Read
+                | Token::Write
+                | Token::While
+                | Token::Call
+                | Token::If => break,
+                Token::Semicolon => {
+                    self.advance();
+                    break;
+                }
+                _ => {}
+            }
+
+            self.advance();
+        }
+        println!(
+            "[debug] synchronization: next token is {:?}",
+            self.lookahead
+        );
     }
 
     fn parse_identifier(&mut self) -> Result<String, UnexpectedBehaviorWhileParsing> {
@@ -295,39 +330,52 @@ impl<'input> Ll1Parser<'input> {
     }
 
     fn parse_statement(&mut self) -> Result<Box<Statement>, UnexpectedBehaviorWhileParsing> {
-        if self.match_identifier()? {
-            return Ok(Box::new(Statement::Assign(self.parse_assign_statement()?)));
+        fn try_parse(
+            parser: &mut Ll1Parser,
+        ) -> Result<Box<Statement>, UnexpectedBehaviorWhileParsing> {
+            if parser.match_identifier()? {
+                return Ok(Box::new(Statement::Assign(
+                    parser.parse_assign_statement()?,
+                )));
+            }
+
+            if parser.match_token(Token::If)? {
+                return Ok(Box::new(Statement::Condition(
+                    parser.parse_condition_statement()?,
+                )));
+            }
+
+            if parser.match_token(Token::While)? {
+                return Ok(Box::new(Statement::Loop(parser.parse_loop_statement()?)));
+            }
+
+            if parser.match_token(Token::Call)? {
+                return Ok(Box::new(Statement::Call(parser.parse_call_statement()?)));
+            }
+
+            if parser.match_token(Token::Read)? {
+                return Ok(Box::new(Statement::Read(parser.parse_read_statement()?)));
+            }
+
+            if parser.match_token(Token::Write)? {
+                return Ok(Box::new(Statement::Write(parser.parse_write_statement()?)));
+            }
+
+            if parser.match_token(Token::Begin)? {
+                return Ok(Box::new(Statement::Compound(
+                    parser.parse_compound_statement()?,
+                )));
+            }
+
+            Ok(Box::new(Statement::Null))
         }
 
-        if self.match_token(Token::If)? {
-            return Ok(Box::new(Statement::Condition(
-                self.parse_condition_statement()?,
-            )));
+        let result = try_parse(self);
+        if result.is_err() {
+            Ok(Box::new(Statement::Error))
+        } else {
+            result
         }
-
-        if self.match_token(Token::While)? {
-            return Ok(Box::new(Statement::Loop(self.parse_loop_statement()?)));
-        }
-
-        if self.match_token(Token::Call)? {
-            return Ok(Box::new(Statement::Call(self.parse_call_statement()?)));
-        }
-
-        if self.match_token(Token::Read)? {
-            return Ok(Box::new(Statement::Read(self.parse_read_statement()?)));
-        }
-
-        if self.match_token(Token::Write)? {
-            return Ok(Box::new(Statement::Write(self.parse_write_statement()?)));
-        }
-
-        if self.match_token(Token::Begin)? {
-            return Ok(Box::new(Statement::Compound(
-                self.parse_compound_statement()?,
-            )));
-        }
-
-        Ok(Box::new(Statement::Null))
     }
 
     fn parse_assign_statement(
@@ -347,15 +395,18 @@ impl<'input> Ll1Parser<'input> {
         &mut self,
     ) -> Result<CompoundStatement, UnexpectedBehaviorWhileParsing> {
         self.consume(Token::Begin)?;
-        println!("[debug] compound: first statement");
         let mut statements = vec![self.parse_statement()?];
-        println!("[debug] compound: try accept more statements");
         loop {
-            if !self.match_token(Token::Semicolon)? {
+            if !self.match_token(Token::Semicolon)? && self.match_token(Token::End)? {
                 break;
             }
 
-            self.consume(Token::Semicolon).unwrap();
+            // If a semicolon is forgotten at non-last statement, do a recovery
+            match self.consume(Token::Semicolon) {
+                Ok(_) | Err(UnexpectedBehaviorWhileParsing::UnexpectedNormalToken) => {}
+                Err(err) => return Err(err),
+            }
+
             statements.push(self.parse_statement()?);
         }
         self.consume(Token::End)?;

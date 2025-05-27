@@ -46,9 +46,14 @@ fn main() {
         let lexer = Lexer::new(&source_code);
 
         let parser = Ll1Parser::new(lexer);
-        let parse_result = parser.parse().unwrap();
+        let parse_result = parser.parse();
+        if parse_result.is_err() {
+            println!("==== Compile failed ====");
+            println!("{:?}", parse_result);
+            return;
+        }
 
-        let (ast, symbols) = parse_result;
+        let (ast, symbols) = parse_result.unwrap();
         AstTraverser::traverse(&ast, &symbols)
             .unwrap()
             .iter()
